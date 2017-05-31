@@ -18,26 +18,33 @@ public class Task1 {
         final ExecutionEnvironment env =
                 ExecutionEnvironment.getExecutionEnvironment();
 
-        String geoDir = "/share/genedata/small/";
-        String patientDir = "/share/genedata/small/";
-        String outputDir = "/user/lhan9852/assignment3/small/";
+        String geoDir = "hdfs:///share/genedata/small/";
+        String patientDir = "hdfs:///share/genedata/small/";
+        String outputDir = "hdfs:///user/lhan9852/assignment3/small/";
 
         // id, geneid, expression_value
         DataSet<Tuple3<String, Integer, Double>> geoData =
                 env.readTextFile(geoDir+"GEO.txt")
-                .map(line->
-                        new Tuple3<String, Integer, Double>(line.split(",")[0],Integer.parseInt(line.split(",")[1]),Double.parseDouble(line.split(",")[2])))
+                .map(line->{
+                    String[] values = line.split(",");
+                    if(values[0].trim().equals("patientid")){
+                        return new Tuple3<String, Integer, Double>("patientid", -1, 0d);
+                    }else{
+                        return new Tuple3<String, Integer, Double>(values[0].trim(),Integer.parseInt(values[1].trim()),Double.parseDouble(values[2].trim()));
+                    }
+                })
                 .filter(new GeneIDFilter());
 
         // id cancer-type
+
         DataSet<Tuple2<String, String>> patientData =
-                env.readTextFile(patientDir+"PatientMetaData.txt")
+                env.readTextFile(geoDir+"PatientMetaData.txt")
                 .flatMap((line, out)->{
                     String[] values = line.split(",");
                     if(values.length==6&&!values[0].equals("id")){
                         String[] diseases = values[4].split("\\s+");
                         for (String disease:diseases){
-                            out.collect(new Tuple2<String, String>(values[0], disease));
+                            out.collect(new Tuple2<String, String>(values[0].trim(), disease));
                         }
                     }
                 });
@@ -58,7 +65,9 @@ public class Task1 {
                         .sum(1);
 
 
-        result.writeAsText(outputDir+"task1.txt");
+        result = result.partitionCustom(new OnePartitioner(),0).sortPartition(1, Order.DESCENDING);
+        result.writeAsText(outputDir+"task1");
+        env.execute();
     }
 
 }
