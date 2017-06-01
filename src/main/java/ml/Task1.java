@@ -62,10 +62,12 @@ public class Task1 {
                 cancersData
                         .map(tuple2 -> new Tuple2<String, Integer>(tuple2.f0, 1))
                         .groupBy(0)
-                        .sum(1);
+                        .sum(1)
+                        .setParallelism(1)
+                        .sortPartition(1, Order.DESCENDING);
 
 
-        result = result.partitionCustom(new OnePartitioner(),0).sortPartition(1, Order.DESCENDING);
+        //result = result.partitionCustom(new OnePartitioner(),0).sortPartition(1, Order.DESCENDING);
         result.writeAsText(outputDir+"task1");
         env.execute();
     }
