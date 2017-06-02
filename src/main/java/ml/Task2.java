@@ -23,11 +23,10 @@ public class Task2 {
         final ExecutionEnvironment env =
                 ExecutionEnvironment.getExecutionEnvironment();
 
-        int iterations = 5;
+        int iterations = Integer.parseInt(params.getRequired("set-size"));
 
-        String geoDir = "hdfs:///share/genedata/test/";
-        String patientDir = "hdfs:///share/genedata/test/";
-        String outputDir = "hdfs:///user/lhan9852/assignment3/test/";
+        String geoDir = "hdfs:///share/genedata/"+params.getRequired("dir")+"/";
+        String outputDir = "hdfs:///user/lhan9852/assignment3/"+params.getRequired("dir")+"/";
 
         // we get (id, geneids) with
         // all genes having expression_value > 1250000
@@ -56,9 +55,9 @@ public class Task2 {
                         });
 
         //get (patientid, cancer-type)
-        DataSet<Tuple2<String, String[]>> patientData =
+        DataSet<Tuple2<String, Integer>> patientData =
                 env.readTextFile(geoDir+"PatientMetaData.txt")
-                        .flatMap((line, out)->{
+                        .map(line->{
                             String[] values = line.split(",");
                             if(values.length==6&&!values[0].equals("id")){
                                 String[] diseases = values[4].split("\\s+");
@@ -69,11 +68,23 @@ public class Task2 {
                                         ||diseasesArray.contains("leukemia")
                                         ||diseasesArray.contains("lymphoma")){
 
-                                    out.collect(new Tuple2<String, String[]>(values[0].trim(), diseases));
+                                    return new Tuple2<String, Integer>(values[0], 1);
 
+                                }else{
+                                    return new Tuple2<String, Integer>(values[0], 0);
                                 }
                             }
-                        });
+                            else{
+                                return new Tuple2<String, Integer>(values[0], 0);
+                            }
+                        })
+                .filter(tuple -> {
+                    if(tuple.f1==0){
+                        return false;
+                    }else {
+                        return true;
+                    }
+                });
 
         // (patientid, [geneid-1, geneid-2, geneid-3, ...])
         // resultData is transaction
@@ -85,8 +96,21 @@ public class Task2 {
                         .projectFirst(0)
                         .projectSecond(1);
 
+        double coefficient = Double.parseDouble(params.getRequired("coefficient"));
         long total = resultData.count();
-        double min_support = total*0.3d;
+        double min_support = total*coefficient;
+
+        System.out.println("==============================================");
+        System.out.println("Total number of total patients: " + geoData.count());
+        System.out.println("==============================================");
+
+        System.out.println("==============================================");
+        System.out.println("Total number of valid patients: " + patientData.count());
+        System.out.println("==============================================");
+
+        System.out.println("==============================================");
+        System.out.println("Total number of support threshold: " + min_support);
+        System.out.println("==============================================");
 
         DataSet<Tuple2<String, Integer>> input =
                 resultData.flatMap((tuple, out)->{
@@ -96,7 +120,7 @@ public class Task2 {
                 });
 
 
-        input.first(10).print();
+        //input.first(10).print();
         //KeySelector<ItemSet, String> selector = new Task2KeySelector();
 
         //get the itemset with size=1
@@ -122,7 +146,7 @@ public class Task2 {
                 .filter(new Task2SupportFilter(min_support));
 
 
-        DataSet<ItemSet> output = iteSet.closeWith(selected);
+        DataSet<ItemSet> output = iteSet.closeWith(selected,selected);
         output.writeAsText(outputDir+"task2");
         env.execute();
     }
