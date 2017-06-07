@@ -1,8 +1,9 @@
 package ml;
 
+import org.apache.flink.api.common.operators.Order;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
-import org.apache.flink.api.java.functions.KeySelector;
+
 import org.apache.flink.api.java.operators.IterativeDataSet;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -10,7 +11,6 @@ import org.apache.flink.api.java.utils.ParameterTool;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -78,13 +78,13 @@ public class Task2 {
                                 return new Tuple2<String, Integer>(values[0], 0);
                             }
                         })
-                .filter(tuple -> {
-                    if(tuple.f1==0){
-                        return false;
-                    }else {
-                        return true;
-                    }
-                });
+                        .filter(tuple -> {
+                            if(tuple.f1==0){
+                                return false;
+                            }else {
+                                return true;
+                            }
+                        });
 
         // (patientid, [geneid-1, geneid-2, geneid-3, ...])
         // resultData is transaction
@@ -99,18 +99,6 @@ public class Task2 {
         double coefficient = Double.parseDouble(params.getRequired("coefficient"));
         long total = resultData.count();
         double min_support = total*coefficient;
-
-        System.out.println("==============================================");
-        System.out.println("Total number of total patients: " + geoData.count());
-        System.out.println("==============================================");
-
-        System.out.println("==============================================");
-        System.out.println("Total number of valid patients: " + patientData.count());
-        System.out.println("==============================================");
-
-        System.out.println("==============================================");
-        System.out.println("Total number of support threshold: " + min_support);
-        System.out.println("==============================================");
 
         DataSet<Tuple2<String, Integer>> input =
                 resultData.flatMap((tuple, out)->{
@@ -147,7 +135,21 @@ public class Task2 {
 
 
         DataSet<ItemSet> output = iteSet.closeWith(selected,selected);
-        output.writeAsText(outputDir+"task2");
+
+        DataSet<String> orderedOutput = output
+                .map(itemSet -> new Tuple2<Integer, ArrayList<Integer>>(itemSet.getNumberOfTransactions(), itemSet.items))
+                .setParallelism(1)
+                .sortPartition(0, Order.DESCENDING)
+                .map(itemSet -> {
+                    String key = "";
+                    key += itemSet.f0;
+                    for (int i : itemSet.f1){
+                        key+=" "+i;
+                    }
+                    return key;
+                });
+        //orderedOutput.print();
+        orderedOutput.writeAsText(outputDir+"task2");
         env.execute();
     }
 

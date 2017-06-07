@@ -5,14 +5,12 @@ package ml;
  */
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 //import com.google.protobuf.joi
 
-public class ItemSet implements Serializable {
+public class ItemSet implements Serializable, Comparable {
 
     public ArrayList<Integer> items;
     private int numberOfTransactions;
@@ -87,5 +85,14 @@ public class ItemSet implements Serializable {
     }
 
 
+    @Override
+    public int compareTo(Object o) {
+        ItemSet i = (ItemSet)o;
+        if(i.items.containsAll(this.items)&&i.items.size()==this.items.size()){
+            return 0;
+        }else{
+            return 1;
+        }
+    }
 }
 

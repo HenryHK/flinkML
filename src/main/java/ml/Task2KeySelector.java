@@ -4,6 +4,7 @@ import org.apache.flink.api.java.functions.KeySelector;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 
 
 /**
@@ -21,7 +22,8 @@ public class Task2KeySelector implements KeySelector<ItemSet, String> {
 
         for (Integer item : items) {
             key += item.toString();
+            key += " ";
         }
-        return key.toString();
+        return key;
     }
 }

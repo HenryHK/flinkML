@@ -9,8 +9,8 @@ public class Task2SupportFilter implements FilterFunction<ItemSet> {
 
     private double numOfTransactions;
 
-    public Task2SupportFilter(double numOfTransations) {
-        this.numOfTransactions = numOfTransations;
+    public Task2SupportFilter(double numOfTransactions) {
+        this.numOfTransactions = numOfTransactions;
 
     }
 

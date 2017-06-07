@@ -3,6 +3,7 @@ package ml;
 import org.apache.flink.api.common.functions.CrossFunction;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 /**
  * Created by lhan on 17-6-1.
