@@ -14,7 +14,7 @@ target/ml-1.0-SNAPSHOT.jar \
 --set-size 5
 
 flink run -m yarn-cluster -yn 20 \
--c ml.Q2 \
+-c ml.Task2 \
 target/ml-1.0-SNAPSHOT.jar \
 --dir large \
 --coefficient 0.3 \
