@@ -1,23 +1,27 @@
 package ml;
 
+import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.operators.Order;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 
 import org.apache.flink.api.java.operators.DeltaIteration;
 import org.apache.flink.api.java.operators.IterativeDataSet;
+import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.utils.ParameterTool;
+import scala.Int;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
  * Created by lhan on 17-6-1.
  */
-public class Task2 {
+public class Task2Naive {
 
     public static void main(String[] args) throws Exception{
         final ParameterTool params = ParameterTool.fromArgs(args);
@@ -113,58 +117,92 @@ public class Task2 {
         //KeySelector<ItemSet, String> selector = new Task2KeySelector();
 
         //get the itemset with size=1
-        DataSet<ItemSet> initial = input
-                // map item to 1
-                .map(new Task2Mapper())
-                // group by hashCode of the ItemSet
-                .groupBy(new Task2KeySelector())
-                // sum the number of transactions containing the ItemSet
-                .reduce(new Task2ItemSetReducer())
-                // remove ItemSets with frequency under the support threshold
-                .filter(new Task2SupportFilter(min_support));
-
-//        DeltaIteration<ItemSet, ItemSet> deltaIteration = initial.iterateDelta(initial, iterations-1, 0);
-//
-//        DataSet<ItemSet> candidates = deltaIteration.getWorkset().cross(initial)
-//                .with(new Task2ItemSetCross())
-//                .distinct(new Task2KeySelector());
-//
-//        DataSet<ItemSet> selected = candidates
-//                .map(new Task2FrequencyCalculator()).withBroadcastSet(resultData, "transactions")
-//                .filter(new Task2SupportFilter(min_support));
-//
-//        DataSet<ItemSet> output = deltaIteration.closeWith(selected, selected);
-//        output.print();
-
-        IterativeDataSet<ItemSet> iteSet = initial.iterate(iterations - 1);
-
-        DataSet<ItemSet> candidates = iteSet.setParallelism(80).cross(initial)
-                .with(new Task2ItemSetCross())
-                .distinct(new Task2KeySelector());
-
-        // calculate actual numberOfTransactions
-        DataSet<ItemSet> selected = candidates
-                .map(new Task2FrequencyCalculator()).withBroadcastSet(resultData, "transactions")
-                .filter(new Task2SupportFilter(min_support));
-
-
-        DataSet<ItemSet> output = iteSet.closeWith(selected,selected);
-
-        DataSet<String> orderedOutput = output
-                .map(itemSet -> new Tuple2<Integer, ArrayList<Integer>>(itemSet.getNumberOfTransactions(), itemSet.items))
-                .setParallelism(1)
-                .sortPartition(0, Order.DESCENDING)
-                .map(itemSet -> {
-                    String key = "";
-                    key += itemSet.f0;
-                    for (int i : itemSet.f1){
-                        key+="\t"+i;
+        DataSet<Tuple2<List<Integer>, Integer>> initial = input
+                .map(stringIntegerTuple2 -> new Tuple2<>(stringIntegerTuple2.f1, 1))
+                .groupBy(0)
+                .reduceGroup((tuples, out)->{
+                    int id = -1;
+                    int count = 0;
+                    for (Tuple2<Integer, Integer> tuple : tuples){
+                        id = tuple.f0;
+                        count += tuple.f1;
                     }
-                    return key;
+                    LinkedList<Integer> list = new LinkedList<>();
+                    list.add(id);
+                    if(count>= min_support){
+                        out.collect(new Tuple2<>(list, count));
+                    }
                 });
-//        orderedOutput.print();
-        orderedOutput.writeAsText(outputDir+"task2");
-        env.execute();
+
+        DataSet<Tuple2<List<Integer>, Integer>> baskets = resultData
+                .map(tuple -> {
+                    LinkedList<Integer> list = new LinkedList<>();
+                    for (int i : tuple.f1){
+                        list.add(i);
+                    }
+                    return new Tuple2<>(list, list.size());
+                });
+
+
+        DeltaIteration<Tuple2<List<Integer>, Integer>, Tuple2<List<Integer>, Integer>> iteration = initial.iterateDelta(initial, iterations, 1);
+
+        // Candidate Set: (List<Item ID>, k)
+        DataSet<Tuple2<List<Integer>, Integer>> candidateSet = aprioriGen(iteration.getWorkset());
+
+        // reduced: (null, k)
+        DataSet<Tuple2<List<Integer>, Integer>> reduced = candidateSet.reduce((value1, value2) -> new Tuple2<List<Integer>, Integer>(null, value1.f1));
+        // Min support subsets: (List<Item ID>, k)
+        DataSet<Tuple2<String, Integer>> minSupportSubsets = baskets.join(reduced).where(tuple -> true).equalTo(tuple -> true).with((tuple1, tuple2) -> new Tuple2<List<Integer>, Integer>(tuple1.f0, tuple2.f1)).flatMap((FlatMapFunction<Tuple2<List<Integer>, Integer>, Tuple2<String, Integer>>) (tuple, out) -> {
+            int k = tuple.f1;
+            List<Integer> list = new LinkedList<Integer>(tuple.f0);
+            if (list.size() >= k) {
+                for (int i = 0; i <= k - 2; i++) {
+                    list.remove(i);
+                    out.collect(new Tuple2<String, Integer>(list.toString(), 1));
+                }
+            }
+        }).groupBy(0).sum(1).filter(tuple -> tuple.f1 >= min_support);
+
+        // Delta (k frequent itemsets): (List<Item ID>, k)
+        DataSet<Tuple2<List<Integer>, Integer>> delta = candidateSet.join(minSupportSubsets).where(tuple -> tuple.f0.toString()).equalTo(0).projectFirst(0, 1);
+
+        iteration.closeWith(delta, delta).print();
+        iteration.getWorkset().print();
+        iteration.getSolutionSet().print();
+
+        // execute program
+        //env.execute("Team PSD Übung 3");
+
+
     }
 
+
+    private static DataSet<Tuple2<List<Integer>, Integer>> aprioriGen(DataSet<Tuple2<List<Integer>, Integer>> freqKItemSets) {
+        // Join Step
+        DataSet<Tuple2<List<Integer>, Integer>> joinedSet = freqKItemSets.join(freqKItemSets).where((tuple) -> {
+            List<Integer> list = new LinkedList<Integer>(tuple.f0);
+            list.remove(list.size() - 1);
+            return list.toString();
+        }).equalTo((tuple) -> {
+            List<Integer> list = new LinkedList<Integer>(tuple.f0);
+            list.remove(list.size() - 1);
+            return list.toString();
+        }).filter(tuple -> tuple.f0.f0.get(tuple.f0.f0.size() - 1) < tuple.f1.f0.get(tuple.f1.f0.size() - 1)).map((tuple) -> {
+            List<Integer> candidateList = tuple.f0.f0;
+            candidateList.add(tuple.f1.f0.get(candidateList.size() - 1));
+            return new Tuple2<List<Integer>, Integer>(candidateList, tuple.f1.f1 + 1);
+        });
+        // Prune Step
+        DataSet<Tuple2<List<Integer>, Integer>> prunedSet = joinedSet.join(freqKItemSets).where(1).equalTo((tuple) -> tuple.f1 - 1).filter((tuple) -> {
+            List<Integer> list = new LinkedList<Integer>(tuple.f0.f0);
+            for (int i = 0; i <= tuple.f1.f0.size() - 2; i++) {
+                list.remove(i);
+                if (!list.toString().equals(tuple.f1.f0.toString())) {
+                    return false;
+                }
+            }
+            return true;
+        }).map((tuple) -> new Tuple2<List<Integer>, Integer>(tuple.f0.f0, tuple.f0.f1));
+        return prunedSet;
+    }
 }

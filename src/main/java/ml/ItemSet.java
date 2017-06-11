@@ -5,6 +5,8 @@ package ml;
  */
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
@@ -76,8 +78,9 @@ public class ItemSet implements Serializable, Comparable {
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(numberOfTransactions);
+        Collections.sort(items);
         for(Integer i : items){
-            sb.append(" "+i);
+            sb.append("\t"+i);
         }
         return sb.toString();
 
