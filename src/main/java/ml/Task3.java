@@ -104,6 +104,7 @@ public class Task3 {
         result = result.filter(arrayListArrayListFloatTuple3 -> arrayListArrayListFloatTuple3.f2>threshold);
 
         DataSet<String> output = result
+                .sortPartition(2, Order.DESCENDING)
                 .map(tuple3 -> {
                     StringBuilder str = new StringBuilder();
                     for (int i : tuple3.f0){
@@ -122,7 +123,7 @@ public class Task3 {
                     return str.toString();
                 });
 
-        output.print();
+        //output.print();
         output.writeAsText(outputDir);
         env.execute();
 

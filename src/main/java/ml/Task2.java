@@ -4,7 +4,6 @@ import org.apache.flink.api.common.operators.Order;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 
-import org.apache.flink.api.java.operators.DeltaIteration;
 import org.apache.flink.api.java.operators.IterativeDataSet;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -123,22 +122,9 @@ public class Task2 {
                 // remove ItemSets with frequency under the support threshold
                 .filter(new Task2SupportFilter(min_support));
 
-//        DeltaIteration<ItemSet, ItemSet> deltaIteration = initial.iterateDelta(initial, iterations-1, 0);
-//
-//        DataSet<ItemSet> candidates = deltaIteration.getWorkset().cross(initial)
-//                .with(new Task2ItemSetCross())
-//                .distinct(new Task2KeySelector());
-//
-//        DataSet<ItemSet> selected = candidates
-//                .map(new Task2FrequencyCalculator()).withBroadcastSet(resultData, "transactions")
-//                .filter(new Task2SupportFilter(min_support));
-//
-//        DataSet<ItemSet> output = deltaIteration.closeWith(selected, selected);
-//        output.print();
-
         IterativeDataSet<ItemSet> iteSet = initial.iterate(iterations - 1);
 
-        DataSet<ItemSet> candidates = iteSet.setParallelism(80).cross(initial)
+        DataSet<ItemSet> candidates = iteSet.cross(initial)
                 .with(new Task2ItemSetCross())
                 .distinct(new Task2KeySelector());
 
@@ -162,7 +148,7 @@ public class Task2 {
                     }
                     return key;
                 });
-//        orderedOutput.print();
+
         orderedOutput.writeAsText(outputDir+"task2");
         env.execute();
     }

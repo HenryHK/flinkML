@@ -18,9 +18,9 @@ public class Task1 {
         final ExecutionEnvironment env =
                 ExecutionEnvironment.getExecutionEnvironment();
 
-        String geoDir = "hdfs:///share/genedata/small/";
+        String geoDir = "hdfs:///share/genedata/"+params.getRequired("dir")+"/";
         String patientDir = "hdfs:///share/genedata/small/";
-        String outputDir = "hdfs:///user/lhan9852/assignment3/small/";
+        String outputDir = "hdfs:///user/lhan9852/assignment3/"+params.getRequired("dir")+"/";
 
         // id, geneid, expression_value
         DataSet<Tuple3<String, Integer, Double>> geoData =
@@ -36,7 +36,6 @@ public class Task1 {
                 .filter(new GeneIDFilter());
 
         // id cancer-type
-
         DataSet<Tuple2<String, String>> patientData =
                 env.readTextFile(geoDir+"PatientMetaData.txt")
                 .flatMap((line, out)->{
@@ -67,8 +66,8 @@ public class Task1 {
                         .sortPartition(1, Order.DESCENDING);
 
 
-        //result = result.partitionCustom(new OnePartitioner(),0).sortPartition(1, Order.DESCENDING);
-        result.writeAsText(outputDir+"task1");
+        DataSet<String> output = result.map(tuple -> tuple.f0+"\t"+tuple.f1.toString());
+        output.writeAsText(outputDir+"task1");
         env.execute();
     }
 
